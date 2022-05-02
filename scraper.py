@@ -1,3 +1,4 @@
+from operator import contains
 from xdrlib import ConversionError
 from bs4 import BeautifulSoup
 from click import MissingParameter
@@ -8,11 +9,11 @@ from re import search
 
 
 class Scraper():
-    def __init__(self, link = '') -> None:
+    def __init__(self, link='') -> None:
         self.link = link
         self.page = None
 
-    def contains_page(self, link):
+    def contains_page_num(self, link):
         '''
         returns true if it contains a page and False if not
         '''
@@ -21,24 +22,22 @@ class Scraper():
         if match:
             return True
         else:
-            return False        
-        # https://www.goodreads.com/author/quotes/3137322.Fyodor_Dostoevsky?page=0
-    
-    
-    def scrape_website(self, link = '', page_number= 0):
+            return False
+
+    def scrape_website(self, link='', page_num=0):
         '''
         returns a page object that contains the quotes and their informaiton
         '''
+
         if not link:
             if self.link:
                 link = self.link
             else:
                 raise MissingParameter('No link is provided.')
-        
-        page_num = str(page_number)  
-        self.link = self.link + '?page=' + page_num  
-        webpage = requests.get(self.link)  # Make a request to the website
-        authors = []
+
+        page_num = str(page_num)
+        link = link + '?page=' + page_num
+        webpage = requests.get(link)
         quotes = []
         soup = BeautifulSoup(webpage.text, "html.parser")
         quoteText = soup.select('.quoteText')  # Get the tag and it's class
@@ -46,7 +45,8 @@ class Scraper():
         for i in quoteText:
             # Get the text of the current quote, but only the sentence before a new line
             quote = i.text.strip().split('\n')[0]
-            author = i.find('span', attrs={'class': 'authorOrTitle'}).text.strip()
+            author = i.find(
+                'span', attrs={'class': 'authorOrTitle'}).text.strip()
             book_name = ''
             try:
                 book_name = i.find(
@@ -54,38 +54,40 @@ class Scraper():
             except:
                 pass
             quotes.append(Quote(quote, author, book_name))
-        self.page = Page(quotes, int(page_number))  
+        self.page = Page(quotes, int(page_num))
         return self.page
-    
-    def text_to_mp3(self, text = '', text_lang='en', accent='co.uk', audio_file_name='text.mp3', Fast=True):
-        '''
-        converts the text passed to audio
-        '''
-        if not text:
-            if not self.page:
-                raise ConversionError('Could not convert text.')
-            else:
-                text = self.page.format()
-        speech = gTTS(text, lang=text_lang, tld=accent, slow=not Fast)
-        speech.save(audio_file_name)
-
-
 
 
 class Page():
-    def __init__(self, quotes, page) -> None:
+    def __init__(self, quotes, page_num) -> None:
         self.quotes = quotes
-        self.page = page
+        self.page_num = page_num
 
     def format(self):
         '''
         format the quotes into one string, a.k.a a page of quotes.
         '''
         return ''.join([quote.format() for quote in self.quotes])
-        
+
+    def __str__(self) -> str:
+        return self.format()
+
+    def convert_to_mp3(self, audio_file_name='text.mp3', text_lang='en', accent='co.uk', Fast=True):
+        '''
+        converts the text passed to audio
+        '''
+        speech = gTTS(self.format(), lang=text_lang, tld=accent, slow=not Fast)
+        speech.save(audio_file_name)
+        return audio_file_name
+
+
+
+
 class Quote():
     '''
-    mainly used to take quotes parameters for it to be used in the format function'''
+    mainly used to take quotes parameters for it to be used in the format function
+    '''
+
     def __init__(self, quote, author_name, book_name) -> None:
         self.quote = quote
         self.author_name = author_name
@@ -97,13 +99,11 @@ class Quote():
         # voice stops at stop points not lines.
 
 
-
-
-
-scraper = Scraper('https://www.goodreads.com/author/quotes/3137322.Fyodor_Dostoevsky?page=0')
 link = input('Link: ')
+scraper = Scraper(link)
 print('scarping quotes..')
-page = scrape_website(link)
-text_to_voice(page.format())
+page = scraper.scrape_website()
+print('converting to mp3..')
+rel_path = page.convert_to_mp3()
 print('starting file..')
-os.system('start text.mp3')
+os.system('start {}'.format(rel_path))
